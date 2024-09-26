@@ -1,0 +1,5 @@
+[flake8]
+exclude = 
+    # No need to check docs
+    docs/*,
+max-line-length = 99

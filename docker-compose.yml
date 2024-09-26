@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  db:
+    build: ./artifacts/images/postgres
+    container_name: business-db
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_PASSWORD: thepassword
+    networks:
+      - my_network
+
+  web:
+    build: .
+    command: [ "sh", "-c", "while ! nc -z business-db 5432; do sleep 1; done; python -m flask run --host=0.0.0.0" ]
+    container_name: business-web
+    ports:
+      - "5000:5000"
+    environment:
+      FLASK_APP: /src/app:create_app
+      ENV: preprod
+    networks:
+      - my_network
+
+networks:
+  my_network:
+    driver: bridge

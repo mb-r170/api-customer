@@ -1,0 +1,146 @@
+trigger:
+  batch: True
+  branches:
+    include:
+      - main
+      - staging
+      - dev
+  paths:
+    exclude:
+      - docs/*
+
+variables:
+  prod: 'prod'
+  staging: 'staging'
+  dev: 'dev'
+  ${{ if eq(variables['Build.SourceBranchName'], 'main') }}:
+    env: ${{variables.prod}}
+  ${{ elseif eq(variables['Build.SourceBranchName'], 'staging') }}:
+    env: ${{variables.staging}}
+  ${{ else }}:
+    env: ${{variables.dev}}
+  # use example: echo ${{variables.env}}
+
+stages:
+  - stage: 'Build'
+    displayName: 'Build the project'
+    jobs:
+      - job: 'Build'
+        displayName: 'Build the project'
+        pool:
+          vmImage: 'ubuntu-latest'
+        strategy:
+          matrix:
+            Python39:
+              python.version: '3.9'
+        
+        steps:
+        - task: UsePythonVersion@0
+          inputs:
+            versionSpec: '$(python.version)'
+          displayName: 'Use Python $(python.version)'
+        # Install initial environment Python modules and their dependencies. Also
+        
+        - bash: echo "Running as '"${{variables.env}}"' stage."
+          displayName: 'Check stage name'
+          
+        - script: |
+            sudo apt-get update
+            sudo apt-get install openjdk-8-jdk-headless -y
+            sudo update-alternatives --set java /usr/lib/jvm/java-8-openjdk-amd64/jre/bin/java
+
+            pip install -U setuptools==67.7.2 wheel==0.40.0 
+            python -m pip install --upgrade pip
+          displayName: 'Prepare CI Environment'
+
+        # Install all Python dependencies inside environment
+        - script: |
+            echo "Installing requirements from pyproject.toml"
+            pip install .
+
+          displayName: 'Install PIP dependencies'
+
+        # Pip Freeze to list packages used in the pipeline run.
+        - script: |
+              pip freeze
+          displayName: 'List python package versions'
+
+        # Run Flake8 in the codebase. Flake8 is a Python utility / library to check
+        # for style guide violations in Python code.
+        - script: |
+            echo "Run Flake8"
+            flake8 .
+          displayName: 'Check Style with Flake8'
+
+        # Run isort in the codebase. isort is a Python utility / library to sort
+        # imports alphabetically, and automatically separated into sections and by type.
+        - script: |
+            isort . --check-only  --profile black
+          displayName: 'Run isort'
+
+        # Run black in the codebase. a Python code formatter.
+        - script: |
+            black --check .
+          displayName: 'Run black'
+
+        # use JUnit-formatted XML files to store the test results.
+        - script: |
+            python -m pytest --junit-xml=$(Build.Repository.LocalPath)/logs/TEST-LOCAL.xml $(Build.Repository.LocalPath)/tests/* || true
+          displayName: 'Run Python unit tests for library code'
+
+        # Publishes the test results to Azure DevOps. This lets you visualize
+        # reports and dashboards related to the status of the build process.
+        - task: PublishTestResults@2
+          inputs:
+            testResultsFiles: '**/TEST-*.xml'
+            failTaskOnFailedTests: true
+            publishRunAttachments: true
+  
+  - stage: 'Deploy'
+    displayName: 'Deploy to Databricks'
+    variables:
+    - group: AA_AzureVault
+
+    jobs:
+    - job: 'Deploy'
+      displayName: 'Deploy'
+      pool:
+        vmImage: 'ubuntu-latest'
+      condition: or(eq(variables.env, variables.prod), eq(variables.env, variables.staging))
+      strategy:
+        matrix:
+          Python39:
+            python.version: '3.9'
+      timeoutInMinutes: 2
+      cancelTimeoutInMinutes: 2
+      
+      steps:
+        - task: UsePythonVersion@0
+          inputs:
+            versionSpec: '$(python.version)'
+          displayName: 'Use Python $(python.version)'
+        - bash: |
+            # install the Databricks CLI using curl
+            curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
+          displayName: 'install the Databricks CLI using curl'
+        - script: |
+            databricks -v
+          displayName: 'Check Install Databricks CLI'
+        - bash: |
+              echo -e "[service-principal]\n\
+                host                = $(databricks-host)\n\
+                azure_tenant_id     = $(aad-tenant-id)\n\
+                azure_client_id     = $(aad-service-principal-app-id)\n\
+                azure_client_secret = $(aad-service-principal-app-secret)"\
+                >> ~/.databrickscfg
+          env:
+            # For security, not to leak the token in the logs if sth fails
+            DATABRICKS_TOKEN: $(databricks_api_token)
+          displayName: 'Configure Databricks CLI'
+        - bash: |
+            databricks auth profiles
+          displayName: 'List configured profiles'
+        - bash: |
+            databricks jobs list -p service-principal
+            databricks pipelines list-pipelines -p service-principal
+          displayName: 'List Databricks Jobs'

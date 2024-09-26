@@ -1,0 +1,53 @@
+[project]
+name = "app_buisness"
+authors = [
+    {name = "Advanced Analytics"},
+]
+version = "1.0.0"
+description = "Testing out new data engineers"
+readme = "README.md"
+keywords = ["give", "example", "keywords"]
+license = {text = "Bat Man Industries"}
+requires-python = ">=3.9"
+
+dependencies = [
+    "pyyaml",
+    "requests",
+    "yoyo-migrations",
+    "Flask",
+    "psycopg2",
+    "python-dotenv",
+]
+
+[project.optional-dependencies]
+test = [
+    "black",
+    "pytest",
+    "isort",
+    "flake8",
+]
+docs = [
+    "jupyter_client>=6.0, <7.0",
+]
+
+[project.urls]
+Repository = "<UPDATE_WITH_REPONAME>"
+
+[build-system]
+requires = ["setuptools>=61.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+[tool.setuptools.packages.find]
+namespaces = false
+where=["src"]
+
+
+[tool.isort]
+profile = "black"
+
+[tool.pytest.ini_options]
+testpaths = [
+    "tests"
+]
