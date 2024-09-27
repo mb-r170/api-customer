@@ -127,23 +127,24 @@ def create_app(testing=False):
         except Exception as e:
             return jsonify({'error': str(e)}), 500
 
-    @app.route('/api/v1/interactions/<int:customer_id>', methods=['GET'])
+    @app.route('/api/v1/interactions/', defaults={'id_customer': None}, methods=['GET'])
+    @app.route('/api/v1/interactions/<int:id_customer>', methods=['GET'])
     @jwt_required()
-    def get_interactions(customer_id=None):
+    def get_interactions(id_customer):
         try:
             current_user = get_jwt_identity()
             user = User.query.filter_by(username=current_user).first()
-            permissions = user.permissions.get('get_interactions', [])
-
-            if 'R' not in permissions:
-                return jsonify({'message': 'User has insufficient permissions for this endpoint/method'}), 403
+            permissions = user.permissions
             
+            if not permissions.get("read_all") == "X" and not permissions.get("get_interactions") == "R":
+                return jsonify({'message': 'User has insufficient permissions for this endpoint/method'}), 403
+
             params = request.args.to_dict()
             page = int(params.pop('page', 1))
             page_size = int(params.pop('page_size', 1000))
 
-            if customer_id:
-                interactions = viewInteractions.query.filter_by(customer_id=customer_id).all()
+            if id_customer:
+                interactions = viewInteractions.query.filter_by(id_customer=id_customer).all()
             else:
                 interactions = viewInteractions.query.all()
 
@@ -151,7 +152,7 @@ def create_app(testing=False):
             response = enrichResponse(result, page, page_size)
             return jsonify(response)
         except OperationalError as e:
-            return jsonify({"error": str(e.orig)}), 500
+            return jsonify({'error': str(e.orig)}), 500
         except Exception as e:
             return jsonify({'error': str(e)}), 500
     
