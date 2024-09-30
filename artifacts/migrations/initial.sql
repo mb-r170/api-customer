@@ -1,37 +1,37 @@
 CREATE TABLE customers (
     id_customer SERIAL PRIMARY KEY,
-    id_type INTEGER NOT NULL,
+    id_customer_type INTEGER NOT NULL,
 	customer_name  VARCHAR(500) NOT NULL,
-    id_occupation INTEGER NOT NULL,
+    id_customer_occupation INTEGER NOT NULL,
     change_counter INTEGER DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE customer_types (
-    id_type SERIAL PRIMARY KEY,
+    id_customer_type SERIAL PRIMARY KEY,
     type_name VARCHAR(50) UNIQUE NOT NULL
 );
 
 CREATE TABLE occupations (
-    id_occupation SERIAL PRIMARY KEY,
+    id_customer_occupation SERIAL PRIMARY KEY,
     occupation_name VARCHAR(100) UNIQUE NOT NULL
 );
 
 ALTER TABLE customers
 ADD CONSTRAINT fk_customers_types
-FOREIGN KEY (id_type) REFERENCES customer_types(id_type);
+FOREIGN KEY (id_customer_type) REFERENCES customer_types(id_customer_type);
 
 ALTER TABLE customers
 ADD CONSTRAINT fk_customers_occupations
-FOREIGN KEY (id_occupation) REFERENCES occupations(id_occupation);
+FOREIGN KEY (id_customer_occupation) REFERENCES occupations(id_customer_occupation);
 
 
 CREATE TABLE external_interactions (
     id_interaction SERIAL PRIMARY KEY,
     timestamp TIMESTAMP,
     id_interaction_channel INTEGER NOT NULL,
-    id_customer INTEGER NOT NULL,
+    id_customer_type INTEGER NOT NULL,
     change_counter INTEGER DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -47,7 +47,7 @@ ADD CONSTRAINT fk_external_interactions_channels
 FOREIGN KEY (id_interaction_channel) REFERENCES interaction_channels(id_interaction_channel);
 ALTER TABLE external_interactions
 ADD CONSTRAINT fk_customers
-FOREIGN KEY (id_customer) REFERENCES customers(id_customer);
+FOREIGN KEY (id_customer_type) REFERENCES customer_types(id_customer_type);
 
 CREATE TABLE products_of_discussion (
     id_product SERIAL PRIMARY KEY,
@@ -103,20 +103,22 @@ EXECUTE PROCEDURE update_change_counter();
 
 ---views
 
+--view customers
 CREATE VIEW view_customers AS
-SELECT c.id_customer,o.occupation_name,c.customer_name,t.type_name,c.created_at,c.updated_at FROM public.customers c
-JOIN customer_types t ON c.id_type=t.id_type
-JOIN occupations o ON c.id_occupation=o.id_occupation
+SELECT c.id_customer,o.occupation_name,c.customer_name,c.id_customer_type,t.type_name,c.created_at,c.updated_at FROM public.customers c
+JOIN customer_types t ON c.id_customer_type=t.id_customer_type
+JOIN occupations o ON c.id_customer_occupation=o.id_customer_occupation
 ORDER BY id_customer;
 
+--view outbound interactions per customer group
 CREATE VIEW view_interactions AS
-SELECT id_customer, jsonb_object_agg(channel_name, channel_count) AS channel_counts
-FROM (SELECT c.id_customer, ic.channel_name, COUNT(c.id_interaction_channel) AS channel_count
+SELECT id_customer_type, jsonb_object_agg(channel_name, channel_count) AS channel_counts
+FROM (SELECT c.id_customer_type, ic.channel_name, COUNT(c.id_interaction_channel) AS channel_count
     FROM external_interactions c
     JOIN interaction_channels ic
     ON c.id_interaction_channel = ic.id_interaction_channel
-    GROUP BY c.id_customer, ic.channel_name
-) subquery GROUP BY id_customer ORDER BY id_customer;
+    GROUP BY c.id_customer_type, ic.channel_name
+) subquery GROUP BY id_customer_type ORDER BY id_customer_type;
 
 --demo data
 INSERT INTO customer_types (type_name) VALUES
@@ -136,20 +138,20 @@ INSERT INTO interaction_channels (channel_name) VALUES
   ('Call'),
   ('Bird');
   
-INSERT INTO customers (id_type, id_occupation, customer_name) VALUES
+INSERT INTO customers (id_customer_type, id_customer_occupation, customer_name) VALUES
   (1, 1, 'Fluke Starbucker'),
   (2, 2, 'Bruise Dwayne'),
   (3, 3, 'Kris Kringle'),
   (1, 4, 'Who'),
   (2, 5, 'Christopher');
 
-INSERT INTO external_interactions (timestamp, id_interaction_channel, id_customer) VALUES
-('04/10/2019 09:00', 1, 5),
+INSERT INTO external_interactions (timestamp, id_interaction_channel, id_customer_type) VALUES
+('04/10/2019 09:00', 1, 1),
 ('11/02/2020 16:10', 2, 3),
 ('05/03/2020 11:23', 3, 2),
 ('06/03/2020 11:23', 3, 2),
 ('07/03/2020 11:23', 2, 2),
-('04/06/2021 13:01', 1, 4);
+('04/06/2021 13:01', 1, 1);
 
 INSERT INTO products_of_discussion (month_year, product_name) VALUES
   (NOW(), 'Sand'),

@@ -79,35 +79,30 @@ def create_app(testing=False):
     @app.route('/api/v1/customers', methods=['GET'])
     @jwt_required()
     def get_customers():
-        current_user = get_jwt_identity()
-        user = User.query.filter_by(username=current_user).first()
-
-        params = request.args.to_dict()
-        page = int(params.pop('page', 1))
-        page_size = int(params.pop('page_size', 1000))
-
-        response, status_code = fetch_customers(user, params, page, page_size)
-        return jsonify(response), status_code
-        
-    def fetch_customers(user, params, page, page_size):
         try:
-            permissions = user.permissions
-            if not permissions.get("read_all") == "X" and not "R" in permissions.get("get_customers"):
-                return {'message': 'User has insufficient permissions for this endpoint/method'}, 403
+            current_user = get_jwt_identity()
+            user = User.query.filter_by(username=current_user).first()
+            permissions = user.permissions.get('get_customers', [])
 
-            # Fetch customers
+            if 'R' not in permissions:
+                return jsonify({'message': 'User has insufficient permissions for this endpoint/method'}), 403
+    
+            params = request.args.to_dict()
+            #print(f"params: {params}")
+            page = int(params.pop('page', 1))
+            page_size = int(params.pop('page_size', 1000))
+
             if params:
                 customers = viewCustomers.query.filter_by(**params).all()
             else:
                 customers = viewCustomers.query.all()  # Get all customers if no filters
-
-            result = [customer.as_dict() for customer in customers]
+            result = [customer.as_dict() for customer in customers]            
             response = enrichResponse(result, page, page_size)
-            return response, 200
+            return jsonify(response)
         except OperationalError as e:
-            return {"error": str(e.orig)}, 500
+            return jsonify({"error": str(e.orig)}), 500
         except Exception as e:
-            return {'error': str(e)}, 500
+            return jsonify({'error': str(e)}), 500
 
     @app.route('/api/v1/customers', methods=['POST'])
     @jwt_required()
@@ -115,9 +110,9 @@ def create_app(testing=False):
         try:
             current_user = get_jwt_identity()
             user = User.query.filter_by(username=current_user).first()
-            permissions = user.permissions
+            permissions = user.permissions.get('create_customers', [])
 
-            if not permissions.get("write_all") == "X" and not "W" in permissions.get("create_customers"):
+            if 'W' not in permissions:
                 return jsonify({'message': 'User has insufficient permissions for this endpoint/method'}), 403
             
             customer_name = request.json.get('customer_name')
@@ -141,6 +136,7 @@ def create_app(testing=False):
             user = User.query.filter_by(username=current_user).first()
             permissions = user.permissions
             
+            #if not permissions.get("read_all") == "X" and not permissions.get("get_interactions") == "R":
             if not permissions.get("read_all") == "X" and not "R" in permissions.get("get_interactions"):
                 return jsonify({'message': 'User has insufficient permissions for this endpoint/method'}), 403
 
@@ -149,16 +145,12 @@ def create_app(testing=False):
             page_size = int(params.pop('page_size', 1000))
 
             if id_customer:
-                params_user = {'id_customer': id_customer}
-                response, status_code = fetch_customers(user, params_user, 1, 1)
-                id_customer_type = response['data'][0]['id_customer_type']
+                id_customer_type = 1
                 interactions = viewInteractions.query.filter_by(id_customer_type=id_customer_type).all()
-                result = [interaction.as_dict() for interaction in interactions]
-                result[0]["customer_id"] = id_customer
             else:
                 interactions = viewInteractions.query.all()
-                result = [interaction.as_dict() for interaction in interactions]
 
+            result = [interaction.as_dict() for interaction in interactions]
             response = enrichResponse(result, page, page_size)
             return jsonify(response)
         except OperationalError as e:
