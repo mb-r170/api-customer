@@ -54,3 +54,4 @@ flask_sqlalchemy
 Flask-JWT-Extended
 bcrypt
 werkzeug
+python-Levenshtein

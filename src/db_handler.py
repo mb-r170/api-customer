@@ -40,7 +40,30 @@ class User(db.Model):
     permissions = db.Column(db.JSON, default={})
 
 class Customer(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(120), unique=True, nullable=False)
-    password_hash = db.Column(db.String(128), nullable=False)
-    permissions = db.Column(db.JSON, default={})
+    id_customer = db.Column(db.Integer, primary_key=True)
+    id_customer_type = db.Column(db.Integer, nullable=False)
+    customer_name = db.Column(db.String(128), nullable=False)
+    id_customer_occupation = db.Column(db.Integer, nullable=False)
+
+class Occupation(db.Model):
+    __tablename__ = 'customer_occupations'
+    id_customer_occupation = db.Column(db.Integer, primary_key=True)
+    occupation_name = db.Column(db.String(128), unique=True, nullable=False)
+
+    def as_dict(self):
+        return {
+            "id_customer_occupation": self.id_customer_occupation,
+            "occupation_name": self.occupation_name
+        }
+    
+class Type(db.Model):
+    __tablename__ = 'customer_types'
+    id_customer_type = db.Column(db.Integer, primary_key=True)
+    type_name = db.Column(db.String(128), unique=True, nullable=False)
+
+    def as_dict(self):
+        return {
+            "id_customer_type": self.id_customer_type,
+            "type_name": self.type_name
+        }
+    

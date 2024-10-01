@@ -5,10 +5,11 @@ from .controllers.statistics_controller import stats_blueprint
 
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
 from sqlalchemy.exc import OperationalError
-from .db_handler import viewCustomers, viewInteractions, User
+from .db_handler import viewCustomers, viewInteractions, User, Type, Occupation, Customer
 from .db import db
 from werkzeug.security import generate_password_hash, check_password_hash
 import re
+import Levenshtein
 
 load_dotenv()
 
@@ -116,16 +117,48 @@ def create_app(testing=False):
             current_user = get_jwt_identity()
             user = User.query.filter_by(username=current_user).first()
             permissions = user.permissions
+            print("checking permissions")
 
             if not permissions.get("write_all") == "X" and not "W" in permissions.get("create_customers"):
                 return jsonify({'message': 'User has insufficient permissions for this endpoint/method'}), 403
             
+            print("getting data from json")
             customer_name = request.json.get('customer_name')
-            customer_type = request.json.get('customer_type')
-            customer_occupation = request.json.get('customer_occupation')
+            customer_occupation = request.json.get('occupation_name')
+            customer_type = request.json.get('type_name')
+            
+            print("removing whitespace and shit")
+            customer_name = remove_non_ascii(customer_name)
+            customer_occupation = remove_non_ascii(customer_occupation)
+            customer_type = remove_non_ascii(customer_type)
 
+            print("working on type")
+            types = Type.query.all()
+            print(f"types: {types}")
+            type_names = [type.type_name for type in types]
+            print(f"type_names: {type_names}")
+            customer_type = find_closest_entry(type_names, customer_type)
+            print(f"customer_type: {customer_type}")
+            type_id = Type.query.filter_by(type_name=customer_type).first()
+            print(f"type_id: {type_id}")
+            if not type_id:
+                type_id = create_type(customer_type)
+                print(f"created customer_type: {type_id}")
 
-            response = {}
+            occupations = Occupation.query.all()
+            occupation_names = [occupation.toccupation_name for occupation in occupations]
+            customer_occupation = find_closest_entry(occupation_names, customer_occupation)
+            occupation_id = Type.query.filter_by(type_name=customer_occupation).first()
+            if not occupation_id:
+                occupation_id = create_occupation(customer_occupation)
+            print(f"occupation_id: {occupation_id}")
+
+            new_customer_id = create_customer(type_id, customer_name, occupation_id)
+            params = {"id_customer": new_customer_id}
+            print(f"params: {params}")
+            customer_response = viewCustomers.query.filter_by(**params).all()
+            response = enrichResponse(customer_response)
+
             return jsonify(response)
         except OperationalError as e:
             return jsonify({"error": str(e.orig)}), 500
@@ -165,6 +198,30 @@ def create_app(testing=False):
             return jsonify({'error': str(e.orig)}), 500
         except Exception as e:
             return jsonify({'error': str(e)}), 500
+        
+    def create_type(type_name):
+        new_type = Type(type_name=type_name)
+        db.session.add(new_type)
+        db.session.commit()
+
+        return new_type.id_customer_type
+    
+    def create_occupation(occupation_name):
+        new_occupation = Occupation(type_name=occupation_name)
+        db.session.add(new_occupation)
+        db.session.commit()
+
+        return new_occupation.id_customer_occupation
+    
+    def create_customer(id_customer_type,customer_name,id_customer_occupation):
+        new_customer = Customer(
+            id_customer_type=id_customer_type,
+            customer_name=customer_name,
+            id_customer_occupation=id_customer_occupation)
+        db.session.add(new_customer)
+        db.session.commit()
+
+        return new_customer.id_customer
     
     def scale_down_list(elements, page, page_size):
         try:
@@ -173,6 +230,15 @@ def create_app(testing=False):
             return paginated_elements
         except Exception as e:
             print(f"scale_down_list failed: {e}")
+
+    def remove_non_ascii(string):
+        return re.sub(r'[^\x00-\x7F]', '', string)
+
+    def find_closest_entry(all_entries, new_entry):
+        for channel in all_entries:
+            if Levenshtein.distance(channel.name.lower(), new_entry.lower()) < 2:
+                return channel.name
+        return new_entry
 
     def enrichResponse(query, page, page_size):
         try:
