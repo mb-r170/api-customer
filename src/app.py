@@ -117,47 +117,37 @@ def create_app(testing=False):
             current_user = get_jwt_identity()
             user = User.query.filter_by(username=current_user).first()
             permissions = user.permissions
-            print("checking permissions")
 
             if not permissions.get("write_all") == "X" and not "W" in permissions.get("create_customers"):
                 return jsonify({'message': 'User has insufficient permissions for this endpoint/method'}), 403
             
-            print("getting data from json")
             customer_name = request.json.get('customer_name')
             customer_occupation = request.json.get('occupation_name')
             customer_type = request.json.get('type_name')
             
-            print("removing whitespace and shit")
             customer_name = remove_non_ascii(customer_name)
             customer_occupation = remove_non_ascii(customer_occupation)
             customer_type = remove_non_ascii(customer_type)
 
-            print("working on type")
             types = Type.query.all()
-            print(f"types: {types}")
             type_names = [type.type_name for type in types]
-            print(f"type_names: {type_names}")
             customer_type = find_closest_entry(type_names, customer_type)
-            print(f"customer_type: {customer_type}")
-            type_id = Type.query.filter_by(type_name=customer_type).first()
-            print(f"type_id: {type_id}")
+            type_id = Type.query.filter_by(type_name=customer_type).first().id_customer_type
             if not type_id:
                 type_id = create_type(customer_type)
-                print(f"created customer_type: {type_id}")
 
             occupations = Occupation.query.all()
-            occupation_names = [occupation.toccupation_name for occupation in occupations]
+            occupation_names = [occupation.occupation_name for occupation in occupations]
             customer_occupation = find_closest_entry(occupation_names, customer_occupation)
-            occupation_id = Type.query.filter_by(type_name=customer_occupation).first()
+            occupation_id = Occupation.query.filter_by(occupation_name=customer_occupation).first().id_customer_occupation
             if not occupation_id:
                 occupation_id = create_occupation(customer_occupation)
-            print(f"occupation_id: {occupation_id}")
 
             new_customer_id = create_customer(type_id, customer_name, occupation_id)
             params = {"id_customer": new_customer_id}
-            print(f"params: {params}")
             customer_response = viewCustomers.query.filter_by(**params).all()
-            response = enrichResponse(customer_response)
+            result = [customer.as_dict() for customer in customer_response]
+            response = enrichResponse(result)
 
             return jsonify(response)
         except OperationalError as e:
@@ -207,7 +197,7 @@ def create_app(testing=False):
         return new_type.id_customer_type
     
     def create_occupation(occupation_name):
-        new_occupation = Occupation(type_name=occupation_name)
+        new_occupation = Occupation(occupation_name=occupation_name)
         db.session.add(new_occupation)
         db.session.commit()
 
@@ -235,12 +225,12 @@ def create_app(testing=False):
         return re.sub(r'[^\x00-\x7F]', '', string)
 
     def find_closest_entry(all_entries, new_entry):
-        for channel in all_entries:
-            if Levenshtein.distance(channel.name.lower(), new_entry.lower()) < 2:
-                return channel.name
+        for entry in all_entries:
+            if Levenshtein.distance(entry.lower(), new_entry.lower()) < 2:
+                return entry
         return new_entry
 
-    def enrichResponse(query, page, page_size):
+    def enrichResponse(query, page=1, page_size=1):
         try:
             total_count = len(query)
             result = scale_down_list(query,page,page_size)
