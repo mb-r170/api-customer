@@ -55,3 +55,5 @@ Flask-JWT-Extended
 bcrypt
 werkzeug
 python-Levenshtein
+pytest
+pytest-flask

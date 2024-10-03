@@ -21,7 +21,17 @@ class Config:
 
 class TestConfig(Config):
     DB_HOST = "business-db"
+    '''
+    SQLALCHEMY_DATABASE_URI = 'sqlite:///:memory:'
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
 
+    JWT_SECRET_KEY = 'test-secret-key'
+    JWT_ACCESS_TOKEN_EXPIRES = 3600
+
+    TESTING = True
+    DEBUG = True
+    ENV = "testing"
+    '''
 
 def load_config(testing: bool):
     # Ignore env vars if testing is passed

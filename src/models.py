@@ -1,4 +1,4 @@
-from .db import db
+from src.db import db
 
 class viewCustomers(db.Model):
     __tablename__ = 'view_customers'
@@ -40,6 +40,7 @@ class User(db.Model):
     permissions = db.Column(db.JSON, default={})
 
 class Customer(db.Model):
+    __tablename__ = 'customers'
     id_customer = db.Column(db.Integer, primary_key=True)
     id_customer_type = db.Column(db.Integer, nullable=False)
     customer_name = db.Column(db.String(128), nullable=False)
