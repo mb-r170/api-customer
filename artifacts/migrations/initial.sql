@@ -13,7 +13,7 @@ CREATE TABLE customer_types (
     type_name VARCHAR(50) UNIQUE NOT NULL
 );
 
-CREATE TABLE occupations (
+CREATE TABLE customer_occupations (
     id_customer_occupation SERIAL PRIMARY KEY,
     occupation_name VARCHAR(100) UNIQUE NOT NULL
 );
@@ -24,12 +24,12 @@ FOREIGN KEY (id_customer_type) REFERENCES customer_types(id_customer_type);
 
 ALTER TABLE customers
 ADD CONSTRAINT fk_customers_occupations
-FOREIGN KEY (id_customer_occupation) REFERENCES occupations(id_customer_occupation);
+FOREIGN KEY (id_customer_occupation) REFERENCES customer_occupations(id_customer_occupation);
 
 
 CREATE TABLE external_interactions (
     id_interaction SERIAL PRIMARY KEY,
-    timestamp TIMESTAMP,
+    interaction_date TIMESTAMP,
     id_interaction_channel INTEGER NOT NULL,
     id_customer_type INTEGER NOT NULL,
     change_counter INTEGER DEFAULT 0,
@@ -51,8 +51,8 @@ FOREIGN KEY (id_customer_type) REFERENCES customer_types(id_customer_type);
 
 CREATE TABLE products_of_discussion (
     id_product SERIAL PRIMARY KEY,
-    month_year TIMESTAMP,
-    product_name VARCHAR(100) UNIQUE NOT NULL,
+    discussion_date TIMESTAMP,
+    product_name VARCHAR(100) NOT NULL,
     change_counter INTEGER DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -107,7 +107,7 @@ EXECUTE PROCEDURE update_change_counter();
 CREATE VIEW view_customers AS
 SELECT c.id_customer,o.occupation_name,c.customer_name,c.id_customer_type,t.type_name,c.created_at,c.updated_at FROM public.customers c
 JOIN customer_types t ON c.id_customer_type=t.id_customer_type
-JOIN occupations o ON c.id_customer_occupation=o.id_customer_occupation
+JOIN customer_occupations o ON c.id_customer_occupation=o.id_customer_occupation
 ORDER BY id_customer;
 
 --view outbound interactions per customer group
@@ -120,13 +120,31 @@ FROM (SELECT c.id_customer_type, ic.channel_name, COUNT(c.id_interaction_channel
     GROUP BY c.id_customer_type, ic.channel_name
 ) subquery GROUP BY id_customer_type ORDER BY id_customer_type;
 
+--view of products of discussion with month/year
+CREATE VIEW view_products_month AS
+SELECT TO_CHAR(discussion_date, 'MM-YYYY') AS month_year, product_name FROM products_of_discussion;
+
+--view of products in discussion per month/year
+CREATE VIEW view_products_discussed AS
+SELECT p.product_name, i.id_customer_type, TO_CHAR(i.interaction_date, 'MM-YYYY') AS month_year FROM external_interactions i 
+JOIN view_products_month p ON p.month_year = TO_CHAR(i.interaction_date, 'MM-YYYY')
+ORDER BY month_year;
+
+--view for count of interactions per customer type per product
+CREATE VIEW view_count_product_discussions AS
+SELECT id_customer_type, json_agg(json_build_object(
+'product_name', product_name, 'interactions_count', month_year_count)) AS product_data
+FROM (SELECT id_customer_type, product_name, COUNT(month_year) AS month_year_count
+FROM view_products_discussed GROUP BY id_customer_type, product_name
+) AS subquery GROUP BY id_customer_type;
+
 --demo data
 INSERT INTO customer_types (type_name) VALUES
   ('Red'),
   ('Orange'),
   ('Blue');
 
-INSERT INTO occupations (occupation_name) VALUES
+INSERT INTO customer_occupations (occupation_name) VALUES
   ('Jedi'),
   ('Batman'),
   ('Santa Claus'),
@@ -145,7 +163,7 @@ INSERT INTO customers (id_customer_type, id_customer_occupation, customer_name) 
   (1, 4, 'Who'),
   (2, 5, 'Christopher');
 
-INSERT INTO external_interactions (timestamp, id_interaction_channel, id_customer_type) VALUES
+INSERT INTO external_interactions (interaction_date, id_interaction_channel, id_customer_type) VALUES
 ('04/10/2019 09:00', 1, 1),
 ('11/02/2020 16:10', 2, 3),
 ('05/03/2020 11:23', 3, 2),
@@ -153,9 +171,41 @@ INSERT INTO external_interactions (timestamp, id_interaction_channel, id_custome
 ('07/03/2020 11:23', 2, 2),
 ('04/06/2021 13:01', 1, 1);
 
-INSERT INTO products_of_discussion (month_year, product_name) VALUES
-  (NOW(), 'Sand'),
-  (NOW(), 'Orange');
+INSERT INTO products_of_discussion (discussion_date, product_name) VALUES
+  ('2019-1-1','Sand'),
+('2019-2-1','Sand'),
+('2019-3-1','Sand'),
+('2019-4-1','Sand'),
+('2019-5-1','Sand'),
+('2019-6-1','Sand'),
+('2019-7-1','Sand'),
+('2019-8-1','Sand'),
+('2019-9-1','Sand'),
+('2019-10-1','Sand'),
+('2019-11-1','Sand'),
+('2019-12-1','Sand'),
+('2020-1-1','Sand'),
+('2020-2-1','Sand'),
+('2020-3-1','Sand'),
+('2020-4-1','Sand'),
+('2020-5-1','Sand'),
+('2020-6-1','Sand'),
+('2020-7-1','Sand'),
+('2020-8-1','Sand'),
+('2020-9-1','Sand'),
+('2020-10-1','Sand'),
+('2020-11-1','Sand'),
+('2020-12-1','Sand'),
+('2021-1-1','Orange'),
+('2021-2-1','Orange'),
+('2021-3-1','Orange'),
+('2021-4-1','Orange'),
+('2021-5-1','Orange'),
+('2021-6-1','Orange'),
+('2021-7-1','Orange'),
+('2021-8-1','Orange'),
+('2021-9-1','Orange'),
+('2021-10-1','Orange');
 
 
 INSERT INTO users (username,password_hash,permissions) VALUES
